@@ -210,22 +210,35 @@ class RenderAppleseed(bpy.types.RenderEngine):
         else:
             RenderAppleseed.__material_preview_renderer.update_preview(scene)
 
-        self.__start_final_render(scene, RenderAppleseed.__material_preview_renderer.as_project)
+        self.__start_final_render(scene, RenderAppleseed.__material_preview_renderer.as_project, view_name=None)
 
     def __render_final(self, scene):
         """
         Export and render the scene.
         """
 
-        scene_translator = SceneTranslator.create_final_render_translator(scene)
+        view_name = None
+
+        if scene.render.use_multiview:
+            view_name = scene.render.views[0].name
+            self.active_view_set(view=view_name)
+
+        scene_translator = SceneTranslator.create_final_render_translator(self, scene)
         self.update_stats("appleseed Rendering: Translating scene", "")
         scene_translator.translate_scene()
 
         project = scene_translator.as_project
 
-        self.__start_final_render(scene, project)
+        self.__start_final_render(scene, project, view_name)
 
-    def __start_final_render(self, scene, project):
+        if scene.render.use_multiview:
+            for view in scene.render.views[1:]:
+                view_name = view.name
+                self.active_view_set(view=view_name)
+                scene_translator.update_stereo_camera()
+                self.__start_final_render(scene, project, view_name)
+
+    def __start_final_render(self, scene, project, view_name):
         """
         Start a final render.
         """
@@ -236,7 +249,7 @@ class RenderAppleseed(bpy.types.RenderEngine):
         assert(self.__tile_callback is None)
         assert(self.__render_thread is None)
 
-        self.__tile_callback = FinalTileCallback(self, scene)
+        self.__tile_callback = FinalTileCallback(self, scene, view_name)
 
         self.__renderer_controller = FinalRendererController(self, self.__tile_callback)
 

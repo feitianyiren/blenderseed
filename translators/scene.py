@@ -94,10 +94,11 @@ class SceneTranslator(GroupTranslator):
             export_mode=ProjectExportMode.PROJECT_EXPORT,
             selected_only=scene.appleseed.export_selected,
             context=None,
-            asset_handler=asset_handler)
+            asset_handler=asset_handler,
+            engine=None)
 
     @classmethod
-    def create_final_render_translator(cls, scene):
+    def create_final_render_translator(cls, engine, scene):
         """
         Create a scene translator to export the scene to an in memory appleseed project.
         """
@@ -111,7 +112,8 @@ class SceneTranslator(GroupTranslator):
             export_mode=ProjectExportMode.FINAL_RENDER,
             selected_only=False,
             context=None,
-            asset_handler=asset_handler)
+            asset_handler=asset_handler,
+            engine=engine)
 
     @classmethod
     def create_interactive_render_translator(cls, context):
@@ -129,9 +131,10 @@ class SceneTranslator(GroupTranslator):
             export_mode=ProjectExportMode.INTERACTIVE_RENDER,
             selected_only=False,
             context=context,
-            asset_handler=asset_handler)
+            asset_handler=asset_handler,
+            engine=None)
 
-    def __init__(self, scene, export_mode, selected_only, context, asset_handler):
+    def __init__(self, scene, export_mode, selected_only, context, asset_handler, engine):
         """
         Constructor. Do not use it to create instances of this class.
         Use the @classmethods instead.
@@ -142,6 +145,8 @@ class SceneTranslator(GroupTranslator):
         self.__selected_only = selected_only
 
         self.__context = context
+
+        self.__engine = engine
 
         self.__viewport_resolution = None
 
@@ -215,7 +220,7 @@ class SceneTranslator(GroupTranslator):
         for x in self.__group_translators.values():
             x.create_entities(self.bl_scene)
 
-        self.__calc_motion_subframes()
+        self.__calc_motion_subframes(cam_only=False)
 
         # Insert appleseed entities into the project.
         if self.__world_translator:
@@ -245,6 +250,11 @@ class SceneTranslator(GroupTranslator):
             self.as_project,
             filename,
             asr.ProjectFileWriterOptions.OmitWritingGeometryFiles | asr.ProjectFileWriterOptions.OmitHandlingAssetFiles)
+
+    # Stereoscopic camera update
+    def update_stereo_camera(self):
+        self.__calc_motion_subframes(cam_only=True)
+        self.__camera_translator.update_stereo_cam(self.bl_scene)
 
     # Interactive rendering update functions
     def update_scene(self, scene, context):
@@ -424,7 +434,7 @@ class SceneTranslator(GroupTranslator):
         obj_key = ObjectKey(self.bl_scene.camera)
         logger.debug("Creating camera translator for active camera  %s", obj_key)
         if self.export_mode != ProjectExportMode.INTERACTIVE_RENDER:
-            self.__camera_translator = CameraTranslator(self.bl_scene.camera, self.asset_handler)
+            self.__camera_translator = CameraTranslator(self.bl_scene.camera, self.__engine, self.asset_handler)
         else:
             self.__camera_translator = InteractiveCameraTranslator(self.bl_scene.camera, self.__context, self.asset_handler)
 
@@ -465,7 +475,7 @@ class SceneTranslator(GroupTranslator):
                     logger.debug("Creating group instance translator for object %s", obj.name)
                     self._object_translators[obj_key] = InstanceTranslator(obj, self.__group_translators[group_key], self.asset_handler)
 
-    def __calc_motion_subframes(self):
+    def __calc_motion_subframes(self, cam_only):
         """Calculates subframes for motion blur.  Each blur type can have it's own segment count, so the final list
         created has every transform time needed.  This way we only have to move the frame set point one time, instead of the dozens
         and dozens of times the old exporter did (yay for progress).
@@ -474,7 +484,7 @@ class SceneTranslator(GroupTranslator):
         xform_times = {0.0}
         deform_times = {0.0}
 
-        if self.export_mode != ProjectExportMode.INTERACTIVE_RENDER:
+        if self.export_mode != ProjectExportMode.INTERACTIVE_RENDER and not cam_only:
             shutter_length = self.bl_scene.appleseed.shutter_close - self.bl_scene.appleseed.shutter_open
 
             if self.bl_scene.appleseed.enable_camera_blur:

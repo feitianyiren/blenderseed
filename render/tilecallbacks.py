@@ -36,11 +36,13 @@ logger = get_logger()
 
 
 class FinalTileCallback(asr.ITileCallback):
-    def __init__(self, engine, scene):
+    def __init__(self, engine, scene, view_name):
         super(FinalTileCallback, self).__init__()
 
         self.__engine = engine
         self.__scene = scene
+
+        self.__view_name = view_name
 
         self.__pass_incremented = False
         self.__render_stats = ["Starting", ""]
@@ -140,7 +142,10 @@ class FinalTileCallback(asr.ITileCallback):
         y0 = self.__max_y - iy1  # bottom
 
         # Update image.
-        result = self.__engine.begin_result(x0, y0, take_x, take_y)
+        if self.__view_name is not None:
+            result = self.__engine.begin_result(x0, y0, take_x, take_y, self.__scene.render.layers[0].name, self.__view_name)
+        else:
+            result = self.__engine.begin_result(x0, y0, take_x, take_y, self.__scene.render.layers[0].name)
         layer = result.layers[0].passes["Combined"]
         pix = self.__get_pixels(image, tile_x, tile_y, take_x, take_y, skip_x, skip_y)
         layer.rect = pix

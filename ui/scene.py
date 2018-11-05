@@ -89,6 +89,7 @@ class AppleseedAOVPanel(bpy.types.Panel, AppleseedRenderPanelBase):
 
 
 def register():
+    bpy.types.RENDERLAYER_PT_views.COMPAT_ENGINES.add('APPLESEED_RENDER')
     bpy.types.SCENE_PT_scene.COMPAT_ENGINES.add('APPLESEED_RENDER')
     bpy.types.SCENE_PT_color_management.COMPAT_ENGINES.add('APPLESEED_RENDER')
     bpy.types.SCENE_PT_audio.COMPAT_ENGINES.add('APPLESEED_RENDER')
@@ -116,3 +117,4 @@ def unregister():
     bpy.types.SCENE_PT_audio.COMPAT_ENGINES.remove('APPLESEED_RENDER')
     bpy.types.SCENE_PT_color_management.COMPAT_ENGINES.remove('APPLESEED_RENDER')
     bpy.types.SCENE_PT_scene.COMPAT_ENGINES.remove('APPLESEED_RENDER')
+    bpy.types.RENDERLAYER_PT_views.COMPAT_ENGINES.remove('APPLESEED_RENDER')

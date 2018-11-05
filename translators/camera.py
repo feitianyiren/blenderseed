@@ -45,9 +45,11 @@ class CameraTranslator(Translator):
     # Constructor.
     #
 
-    def __init__(self, camera, asset_handler):
+    def __init__(self, camera, engine, asset_handler):
         super(CameraTranslator, self).__init__(camera, asset_handler)
         self._xform_seq = asr.TransformSequence()
+
+        self.__engine = engine
 
         self.__cam_map = None
         self.__cam_map_inst = None
@@ -59,6 +61,10 @@ class CameraTranslator(Translator):
     @property
     def bl_camera(self):
         return self._bl_obj
+
+    @property
+    def engine(self):
+        return self.__engine
 
     #
     # Entity translation.
@@ -79,7 +85,8 @@ class CameraTranslator(Translator):
         cam_key = self.appleseed_name
         self.__as_camera = asr.Camera(model, cam_key, {})
 
-        self._xform_seq.set_transform(0.0, self._convert_matrix(self.bl_camera.matrix_world))
+        cam_matrix = self.engine.camera_model_matrix(self.bl_camera, False)
+        self._xform_seq.set_transform(0.0, self._convert_matrix(cam_matrix))
 
         self.__set_params(scene)
 
@@ -105,7 +112,20 @@ class CameraTranslator(Translator):
             self.__cam_map_inst = scene.texture_instances().get_by_name(cam_map_inst_name)
 
     def set_transform_key(self, scene, time, key_times):
-        self._xform_seq.set_transform(time, self._convert_matrix(self.bl_camera.matrix_world))
+        cam_matrix = self.engine.camera_model_matrix(self.bl_camera, False)
+        self._xform_seq.set_transform(time, self._convert_matrix(cam_matrix))
+
+    def update_stereo_cam(self, scene):
+        camera = self.bl_camera.data
+        aspect_ratio = get_frame_aspect_ratio(scene)
+        film_width, film_height = calc_film_dimensions(aspect_ratio, camera, 1)
+        params = self.__as_camera.get_parameters()
+        stereo_shift_x = self.engine.camera_shift_x(self.bl_camera, False)
+        params['shift_x'] = (self.bl_camera.data.shift_x + stereo_shift_x) * film_width
+        self.__as_camera.set_parameters(params)
+        self._xform_seq.optimize()
+        self.__as_camera.set_transform_sequence(self._xform_seq)
+
 
     #
     # Internal methods.
@@ -160,11 +180,12 @@ class CameraTranslator(Translator):
 
     def __pinhole_camera_params(self, scene, aspect_ratio, film_width, film_height):
         camera = self.bl_camera
+        stereo_shift_x = self.engine.camera_shift_x(camera, False)
         cam_params = {'aspect_ratio': aspect_ratio,
                       'focal_length': camera.data.lens / 1000, # mm to meters.
                       'film_dimensions': asr.Vector2f(film_width, film_height),
                       'near_z': camera.data.appleseed.near_z,
-                      'shift_x': camera.data.shift_x * film_width,
+                      'shift_x': (camera.data.shift_x + stereo_shift_x) * film_width,
                       'shift_y': camera.data.shift_y * film_height,
                       'shutter_open_end_time': scene.appleseed.shutter_open_end_time,
                       'shutter_open_begin_time': scene.appleseed.shutter_open,
